@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catalyst — Hyper League</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <img src="logo.png" alt="" class="nav-logo" />
+        Hyper League
+      </a>
+      <div class="nav-links">
+        <a href="index.html"       class="nav-link">Home</a>
+        <a href="overdrive.html"   class="nav-link">Overdrive</a>
+        <a href="catalyst.html"    class="nav-link">Catalyst</a>
+        <a href="polytechnic.html" class="nav-link">Polytechnic</a>
+        <a href="worldcup.html"    class="nav-link">World Cup</a>
+        <a href="https://discord.gg/YOUR_INVITE" target="_blank" rel="noopener" class="nav-link nav-discord">Discord</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-hero tier-2">
+    <div class="page-hero-inner">
+      <div class="hero-pill">Tier 2 · Mid Tier</div>
+      <h1 class="page-title">Catalyst</h1>
+      <p class="page-meta">Season <span id="season-num">4</span></p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Standings</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th class="col-team">Team</th>
+              <th>P</th>
+              <th>W</th>
+              <th>L</th>
+              <th>GF</th>
+              <th>GA</th>
+              <th>GD</th>
+              <th>Pts</th>
+            </tr>
+          </thead>
+          <tbody id="league-body">
+            <tr><td colspan="9" class="empty">Loading standings…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>Hyper League &middot; Discord Rocket League 3v3</p>
+    <div class="footer-socials">
+      <a href="https://x.com/YOUR_HANDLE"        target="_blank" rel="noopener" class="footer-social">Twitter / X</a>
+      <a href="https://tiktok.com/@YOUR_HANDLE"  target="_blank" rel="noopener" class="footer-social">TikTok</a>
+      <a href="https://discord.gg/YOUR_INVITE"   target="_blank" rel="noopener" class="footer-social">Discord</a>
+    </div>
+  </footer>
+
+  <script>
+    const SHEET_ID      = '1ilDa0ZleooN3OBruvtOqF9Ym1CitowFjaLCk1GiYiNc';
+    const STANDINGS_GID = '934379579';
+    const SEASON_GID    = '46702868';
+    const LEAGUE        = 'catalyst';
+
+    const ts  = () => '&_ts=' + Date.now();
+    const url = gid => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+
+    function parseCsv(txt) {
+      return txt.trim().replace(/\r/g, '').split('\n').slice(1).map(r => {
+        const c = r.split(',');
+        return { pos:c[0], team:c[1], played:c[2], wins:c[3], losses:c[4],
+                 mf:c[5], ma:c[6], md:c[7], pts:c[8], colour:(c[9]||'').trim() };
+      }).filter(t => t.team);
+    }
+
+    function posBadge(n) {
+      if (n === 1) return `<span class="pos-badge pos-1">1</span>`;
+      if (n === 2) return `<span class="pos-badge pos-2">2</span>`;
+      if (n === 3) return `<span class="pos-badge pos-3">3</span>`;
+      return n;
+    }
+
+    function renderTable(teams) {
+      const tbody = document.getElementById('league-body');
+      tbody.innerHTML = teams.map((t, i) => {
+        const pos  = parseInt(t.pos) || (i + 1);
+        const href = `team.html?team=${encodeURIComponent(t.team)}&league=${LEAGUE}`;
+        const bg   = t.colour ? `background-color:${t.colour}22;` : '';
+        return `<tr style="${bg}">
+          <td>${posBadge(pos)}</td>
+          <td class="col-team"><a href="${href}">${t.team}</a></td>
+          <td>${t.played||'—'}</td><td>${t.wins||'—'}</td><td>${t.losses||'—'}</td>
+          <td>${t.mf||'—'}</td><td>${t.ma||'—'}</td><td>${t.md||'—'}</td>
+          <td class="col-pts">${t.pts||'—'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function load() {
+      try {
+        const txt = await fetch(url(SEASON_GID) + ts(), {cache:'no-store'}).then(r=>r.text());
+        const s   = txt.trim().split(/\r?\n/)[0].split(',')[0].replace(/"/g,'').trim();
+        if (s) document.getElementById('season-num').textContent = s;
+      } catch(_) {}
+
+      try {
+        const txt = await fetch(url(STANDINGS_GID) + ts(), {cache:'no-store'}).then(r=>r.text());
+        renderTable(parseCsv(txt));
+      } catch(e) {
+        document.getElementById('league-body').innerHTML =
+          '<tr><td colspan="9" class="empty">Failed to load standings.</td></tr>';
+      }
+    }
+
+    load();
+    document.querySelector('.nav-link[href="catalyst.html"]').classList.add('active');
+  </script>
+</body>
+</html>

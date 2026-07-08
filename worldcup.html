@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Cup — Hyper League</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <img src="logo.png" alt="" class="nav-logo" />
+        Hyper League
+      </a>
+      <div class="nav-links">
+        <a href="index.html"       class="nav-link">Home</a>
+        <a href="overdrive.html"   class="nav-link">Overdrive</a>
+        <a href="catalyst.html"    class="nav-link">Catalyst</a>
+        <a href="polytechnic.html" class="nav-link">Polytechnic</a>
+        <a href="worldcup.html"    class="nav-link">World Cup</a>
+        <a href="https://discord.gg/YOUR_INVITE" target="_blank" rel="noopener" class="nav-link nav-discord">Discord</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-hero wc">
+    <div class="page-hero-inner">
+      <div class="hero-pill">Special Event</div>
+      <h1 class="page-title">World Cup</h1>
+      <p class="page-meta">Season <span id="season-num">1</span></p>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Groups -->
+    <div class="section-label">Group Stage</div>
+    <div class="groups-grid" id="groups-container">
+      <div class="group-card" style="grid-column:1/-1"><div class="empty">Loading groups…</div></div>
+    </div>
+
+    <!-- Knockout bracket -->
+    <div class="section-label">Knockout Stage</div>
+    <div class="card" style="margin-bottom:1.5rem;">
+      <div class="bracket-wrap" id="bracket-container">
+        <div class="empty">Loading bracket…</div>
+      </div>
+    </div>
+
+    <!-- Player Rankings -->
+    <div class="section-label">Player Rankings</div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Registered Players</span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="col-team">Player</th>
+              <th class="col-team">Team</th>
+              <th>Peak Rank</th>
+            </tr>
+          </thead>
+          <tbody id="players-body">
+            <tr><td colspan="3" class="empty">Loading players…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <p>Hyper League &middot; Discord Rocket League 3v3</p>
+    <div class="footer-socials">
+      <a href="https://x.com/YOUR_HANDLE"        target="_blank" rel="noopener" class="footer-social">Twitter / X</a>
+      <a href="https://tiktok.com/@YOUR_HANDLE"  target="_blank" rel="noopener" class="footer-social">TikTok</a>
+      <a href="https://discord.gg/YOUR_INVITE"   target="_blank" rel="noopener" class="footer-social">Discord</a>
+    </div>
+  </footer>
+
+  <script>
+    const SHEET_ID     = '1ilDa0ZleooN3OBruvtOqF9Ym1CitowFjaLCk1GiYiNc';
+    const GROUPS_GID   = '1035273448';
+    const KNOCKOUTS_GID= '273933869';
+    const PLAYERS_GID  = '1229444923';
+    const SEASON_GID   = '46702868';
+
+    const RANK_COLOURS = {
+      'Bronze':  '#a06b15', 'Silver': '#a5acb4', 'Gold':    '#f0a009',
+      'Platinum':'#1ac7f0', 'Diamond':'#0556b9', 'C1':      '#9810e7',
+      'C2':      '#7e09dd', 'C3':     '#5905a1', 'GC1':     '#bb2222',
+      'GC2':     '#dd1a1a', 'GC3':    '#ff0000', 'SSL':     '#ff00a6',
+    };
+    const RANK_ORDER = ['SSL','GC3','GC2','GC1','C3','C2','C1','Diamond','Platinum','Gold','Silver','Bronze'];
+
+    const ts  = () => '&_ts=' + Date.now();
+    const url = gid => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+
+    function csvToGrid(txt) {
+      return txt.replace(/\r/g,'').split('\n').map(row => {
+        const cells = []; let inQ = false, cell = '';
+        for (const ch of row + ',') {
+          if (ch==='"')         { inQ=!inQ; }
+          else if (ch===','&&!inQ) { cells.push(cell.trim()); cell=''; }
+          else                  { cell+=ch; }
+        }
+        return cells;
+      });
+    }
+
+    /* ── Groups ─────────────────────────────────────────────────────────── */
+    function parseGroups(grid) {
+      // Group data rows start at 0-based rows 1, 8, 15, 22 (4 teams each)
+      const GROUP_STARTS = [1, 8, 15, 22];
+      const GROUP_NAMES  = ['A', 'B', 'C', 'D'];
+      return GROUP_NAMES.map((name, i) => {
+        const start = GROUP_STARTS[i];
+        const teams = [];
+        for (let r = start; r < start + 4 && r < grid.length; r++) {
+          const row  = grid[r] || [];
+          const team = (row[0] || '').trim();
+          if (!team) continue;
+          teams.push({
+            team,
+            played: (row[1]||'').trim(),
+            wins:   (row[2]||'').trim(),
+            losses: (row[3]||'').trim(),
+            gf:     (row[4]||'').trim(),
+            ga:     (row[5]||'').trim(),
+            gd:     (row[6]||'').trim(),
+            pts:    (row[7]||'').trim(),
+            colour: (row[8]||'').trim(),
+          });
+        }
+        return { name, teams };
+      });
+    }
+
+    function renderGroups(groups) {
+      const container = document.getElementById('groups-container');
+      if (!groups.some(g => g.teams.length)) {
+        container.innerHTML = '<div class="group-card" style="grid-column:1/-1"><div class="empty">No group data available.</div></div>';
+        return;
+      }
+      container.innerHTML = groups.map(g => `
+        <div class="group-card">
+          <div class="group-header">Group ${g.name}</div>
+          <table class="group-table">
+            <thead><tr>
+              <th>Team</th><th>P</th><th>W</th><th>L</th>
+              <th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+            </tr></thead>
+            <tbody>
+              ${g.teams.map(t => {
+                const bg = t.colour ? `background-color:${t.colour}22;` : '';
+                return `<tr style="${bg}">
+                  <td><a href="wcteam.html?team=${encodeURIComponent(t.team)}" style="color:inherit;text-decoration:none;font-weight:600;">${t.team}</a></td>
+                  <td>${t.played||'—'}</td><td>${t.wins||'—'}</td><td>${t.losses||'—'}</td>
+                  <td>${t.gf||'—'}</td><td>${t.ga||'—'}</td><td>${t.gd||'—'}</td>
+                  <td><strong>${t.pts||'—'}</strong></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `).join('');
+    }
+
+    /* ── Knockouts ───────────────────────────────────────────────────────── */
+    function parseKnockouts(csv) {
+      const rounds = { R16: [], QF: [], SF: [], Final: [] };
+      csv.replace(/\r/g,'').split('\n').slice(1).forEach(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g,''));
+        const round = cols[0];
+        if (!round || !rounds[round]) return;
+        rounds[round].push({ team1:cols[2]||'', score1:cols[3]||'', score2:cols[4]||'', team2:cols[5]||'' });
+      });
+      return rounds;
+    }
+
+    function bracketTeam(name, myScore, oppScore, hasScores) {
+      const safeName = (name || '').trim();
+      const isBye    = !safeName || safeName.toUpperCase() === 'BYE';
+      const isTBD    = !safeName || safeName.toUpperCase() === 'TBD';
+      const isXScore = myScore.toLowerCase() === 'x';
+      const displayScore = hasScores ? (isXScore ? '0' : myScore) : '';
+
+      let cls = '';
+      let label = safeName;
+      if (isBye || isTBD) {
+        cls   = 'tbd';
+        label = isBye ? 'BYE' : 'TBD';
+      } else if (hasScores) {
+        const ms = isXScore ? 0 : (parseInt(myScore) || 0);
+        const os = oppScore.toLowerCase() === 'x' ? 0 : (parseInt(oppScore) || 0);
+        cls = ms > os ? 'winner' : '';
+      }
+
+      const scoreHtml = displayScore !== ''
+        ? `<span class="bracket-score ${cls==='winner'?'score-w':'score-l'}">${displayScore}</span>`
+        : '';
+      return `<div class="bracket-team ${cls}">${label}${scoreHtml}</div>`;
+    }
+
+    function renderBracket(rounds) {
+      const ROUND_LABELS = { R16: 'Round of 16', QF: 'Quarter Finals', SF: 'Semi Finals', Final: 'Final' };
+      const ORDER        = ['R16', 'QF', 'SF', 'Final'];
+
+      const html = ORDER.filter(r => rounds[r] && rounds[r].length).map(roundKey => {
+        const matches = rounds[roundKey];
+        const matchesHtml = matches.map(m => {
+          const hasScores = m.score1 !== '' && m.score2 !== '';
+          return `<div class="bracket-match">
+            ${bracketTeam(m.team1, m.score1, m.score2, hasScores)}
+            ${bracketTeam(m.team2, m.score2, m.score1, hasScores)}
+          </div>`;
+        }).join('');
+        return `<div class="bracket-col">
+          <div class="bracket-col-label">${ROUND_LABELS[roundKey] || roundKey}</div>
+          <div class="bracket-matches">${matchesHtml}</div>
+        </div>`;
+      }).join('');
+
+      const container = document.getElementById('bracket-container');
+      if (!html) {
+        container.innerHTML = '<div class="empty">No bracket data available.</div>';
+        return;
+      }
+      container.innerHTML = `<div class="bracket">${html}</div>`;
+    }
+
+    /* ── Players ─────────────────────────────────────────────────────────── */
+    function renderPlayers(csv) {
+      const rows = csv.replace(/\r/g,'').split('\n').slice(1).map(r => {
+        const c = []; let inQ=false, cell='';
+        for (const ch of r+',') {
+          if (ch==='"')          { inQ=!inQ; }
+          else if (ch===','&&!inQ){ c.push(cell.trim()); cell=''; }
+          else                   { cell+=ch; }
+        }
+        return c;
+      }).filter(r => r[1]);
+
+      rows.sort((a,b) => {
+        const ai = RANK_ORDER.indexOf(a[2]?.trim());
+        const bi = RANK_ORDER.indexOf(b[2]?.trim());
+        return (ai===-1?999:ai) - (bi===-1?999:bi);
+      });
+
+      const tbody = document.getElementById('players-body');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">No players found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const rank  = (r[2]||'').trim();
+        const color = RANK_COLOURS[rank] || '#334155';
+        return `<tr>
+          <td class="col-team" style="font-weight:600;">${r[1]||'—'}</td>
+          <td class="col-team" style="color:#94a3b8;">${r[0]||'—'}</td>
+          <td><span class="rank-badge" style="background:${color};">${rank||'—'}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    /* ── Load all ────────────────────────────────────────────────────────── */
+    async function load() {
+      try {
+        const txt = await fetch(url(SEASON_GID)+ts(),{cache:'no-store'}).then(r=>r.text());
+        const s   = txt.trim().split(/\r?\n/)[0].split(',')[0].replace(/"/g,'').trim();
+        if (s) document.getElementById('season-num').textContent = s;
+      } catch(_) {}
+
+      const [groupTxt, knockTxt, playerTxt] = await Promise.allSettled([
+        fetch(url(GROUPS_GID)+ts(),    {cache:'no-store'}).then(r=>r.text()),
+        fetch(url(KNOCKOUTS_GID)+ts(), {cache:'no-store'}).then(r=>r.text()),
+        fetch(url(PLAYERS_GID)+ts(),   {cache:'no-store'}).then(r=>r.text()),
+      ]);
+
+      if (groupTxt.status === 'fulfilled') {
+        renderGroups(parseGroups(csvToGrid(groupTxt.value)));
+      } else {
+        document.getElementById('groups-container').innerHTML =
+          '<div class="group-card" style="grid-column:1/-1"><div class="empty">Failed to load groups.</div></div>';
+      }
+
+      if (knockTxt.status === 'fulfilled') {
+        renderBracket(parseKnockouts(knockTxt.value));
+      } else {
+        document.getElementById('bracket-container').innerHTML =
+          '<div class="empty">Failed to load bracket.</div>';
+      }
+
+      if (playerTxt.status === 'fulfilled') {
+        renderPlayers(playerTxt.value);
+      } else {
+        document.getElementById('players-body').innerHTML =
+          '<tr><td colspan="3" class="empty">Failed to load players.</td></tr>';
+      }
+
+    }
+
+    load();
+    document.querySelector('.nav-link[href="worldcup.html"]').classList.add('active');
+  </script>
+</body>
+</html>

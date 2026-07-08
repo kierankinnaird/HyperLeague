@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team — Hyper League</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <img src="logo.png" alt="" class="nav-logo" />
+        Hyper League
+      </a>
+      <div class="nav-links">
+        <a href="index.html"       class="nav-link">Home</a>
+        <a href="overdrive.html"   class="nav-link">Overdrive</a>
+        <a href="catalyst.html"    class="nav-link">Catalyst</a>
+        <a href="polytechnic.html" class="nav-link">Polytechnic</a>
+        <a href="worldcup.html"    class="nav-link">World Cup</a>
+        <a href="https://discord.gg/YOUR_INVITE" target="_blank" rel="noopener" class="nav-link nav-discord">Discord</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-hero" id="team-hero">
+    <div class="page-hero-inner">
+      <a href="#" class="back-link" id="back-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        <span id="back-label">League</span>
+      </a>
+      <h1 class="page-title" id="team-title">—</h1>
+      <p class="page-meta" id="league-subtitle">Season <span id="season-num">—</span></p>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Fixtures -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Fixtures &amp; Results</span>
+      </div>
+      <div id="fixtures-container">
+        <div class="empty">Loading fixtures…</div>
+      </div>
+    </div>
+
+    <!-- Roster -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Roster</span>
+      </div>
+      <div id="roster-container">
+        <div class="empty">Loading roster…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <p>Hyper League &middot; Discord Rocket League 3v3</p>
+    <div class="footer-socials">
+      <a href="https://x.com/YOUR_HANDLE"        target="_blank" rel="noopener" class="footer-social">Twitter / X</a>
+      <a href="https://tiktok.com/@YOUR_HANDLE"  target="_blank" rel="noopener" class="footer-social">TikTok</a>
+      <a href="https://discord.gg/YOUR_INVITE"   target="_blank" rel="noopener" class="footer-social">Discord</a>
+    </div>
+  </footer>
+
+  <script>
+    const SHEET_ID   = '1ilDa0ZleooN3OBruvtOqF9Ym1CitowFjaLCk1GiYiNc';
+    const SEASON_GID = '46702868';
+
+    const RANK_COLOURS = {
+      'Bronze':  '#a06b15', 'Silver': '#a5acb4', 'Gold':    '#f0a009',
+      'Platinum':'#1ac7f0', 'Diamond':'#0556b9', 'C1':      '#9810e7',
+      'C2':      '#7e09dd', 'C3':     '#5905a1', 'GC1':     '#bb2222',
+      'GC2':     '#dd1a1a', 'GC3':    '#ff0000', 'SSL':     '#ff00a6',
+    };
+
+    const LEAGUE_CONFIG = {
+      overdrive:   { gid:'876178219',  standingsGid:'829195735', label:'Overdrive',   back:'overdrive.html',   tier:'tier-1' },
+      catalyst:    { gid:'1457576231', standingsGid:'934379579', label:'Catalyst',    back:'catalyst.html',    tier:'tier-2' },
+      polytechnic: { gid:'1607823597', standingsGid:'629194466', label:'Polytechnic', back:'polytechnic.html', tier:'tier-3' },
+    };
+
+    const GW_START_ROW = 14;
+    const GW_ROW_STEP  = 7;
+    const GW_START_COL = 2;
+    const GW_COL_STEP  = 5;
+    const GW_COLS      = 4;
+    const FIXTURE_ROWS = 5;
+
+    const ts  = () => '&_ts=' + Date.now();
+    const url = gid => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+
+    function csvToGrid(txt) {
+      return txt.replace(/\r/g,'').split('\n').map(row => {
+        const cells=[]; let inQ=false, cell='';
+        for (const ch of row+',') {
+          if (ch==='"')           { inQ=!inQ; }
+          else if (ch===','&&!inQ){ cells.push(cell.trim()); cell=''; }
+          else                    { cell+=ch; }
+        }
+        return cells;
+      });
+    }
+
+    function getCell(grid, row1, col1) {
+      const r = grid[row1-1];
+      return r ? (r[col1-1]||'').trim() : '';
+    }
+
+    function parseFixtures(grid, teamName) {
+      const fixtures = [];
+      let gwNum = 0;
+      for (let rowOff=0; ; rowOff+=GW_ROW_STEP) {
+        const baseRow = GW_START_ROW + rowOff;
+        let anyGW = false;
+        for (let colOff=0; colOff<GW_COLS*GW_COL_STEP; colOff+=GW_COL_STEP) {
+          if (getCell(grid, baseRow, GW_START_COL+colOff).toUpperCase().startsWith('GW')) { anyGW=true; break; }
+        }
+        if (!anyGW) break;
+
+        for (let colOff=0; colOff<GW_COLS*GW_COL_STEP; colOff+=GW_COL_STEP) {
+          const baseCol = GW_START_COL + colOff;
+          if (!getCell(grid, baseRow, baseCol).toUpperCase().startsWith('GW')) continue;
+          gwNum++;
+          for (let f=1; f<=FIXTURE_ROWS; f++) {
+            const r    = baseRow + f;
+            const home = getCell(grid, r, baseCol);
+            const hScore = getCell(grid, r, baseCol+1);
+            const aScore = getCell(grid, r, baseCol+2);
+            const away = getCell(grid, r, baseCol+3);
+            if (!home && !away) continue;
+            if (home.toLowerCase()!==teamName.toLowerCase() && away.toLowerCase()!==teamName.toLowerCase()) continue;
+
+            const hasScores = hScore!=='' && aScore!=='';
+            const isHome    = home.toLowerCase()===teamName.toLowerCase();
+            let result = 'TBD';
+            if (hasScores) {
+              const hs = hScore.toLowerCase()==='x'?0:parseInt(hScore)||0;
+              const as = aScore.toLowerCase()==='x'?0:parseInt(aScore)||0;
+              if (hs===as) result='D';
+              else if ((isHome&&hs>as)||(!isHome&&as>hs)) result='W';
+              else result='L';
+            }
+            fixtures.push({
+              gw: gwNum, home, away,
+              homeScore: hScore.toLowerCase()==='x'?'0':hScore,
+              awayScore: aScore.toLowerCase()==='x'?'0':aScore,
+              result, played: hasScores, isHome,
+            });
+          }
+        }
+      }
+      return fixtures;
+    }
+
+    function renderFixtures(fixtures, teamName, colours) {
+      const container = document.getElementById('fixtures-container');
+      if (!fixtures.length) {
+        container.innerHTML = '<div class="empty">No fixtures found.</div>';
+        return;
+      }
+
+      const html = fixtures.map(f => {
+        const opponent = f.isHome ? f.away : f.home;
+        const oppColour= colours[opponent.toLowerCase()];
+        const oppStyle = oppColour ? `background:${oppColour}22;` : '';
+        const scoreStr = f.played
+          ? `${f.homeScore} – ${f.awayScore}`
+          : '— vs —';
+        const rClass = f.result==='W'?'result-w':f.result==='L'?'result-l':f.result==='D'?'result-d':'result-tbd';
+        return `<div class="fixture-row" style="${oppStyle}">
+          <div class="fixture-gw-num">GW${f.gw}</div>
+          <div class="fixture-opponent">${opponent}</div>
+          <div class="fixture-score">${scoreStr}</div>
+          <span class="result-badge ${rClass}">${f.result}</span>
+        </div>`;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    function parseCsvRow(r) {
+      const c=[]; let inQ=false, cell='';
+      for (const ch of r+',') {
+        if (ch==='"')           { inQ=!inQ; }
+        else if (ch===','&&!inQ){ c.push(cell.trim()); cell=''; }
+        else                    { cell+=ch; }
+      }
+      return c;
+    }
+
+    function renderRoster(csv, teamName) {
+      const players = csv.replace(/\r/g,'').split('\n').slice(1)
+        .map(parseCsvRow)
+        .filter(r => r[0] && r[0].toLowerCase()===teamName.toLowerCase() && r[1]);
+
+      const container = document.getElementById('roster-container');
+      if (!players.length) {
+        container.innerHTML = '<div class="empty">No players found.</div>';
+        return;
+      }
+      container.innerHTML = players.map(p => {
+        const rank  = (p[2]||'').trim();
+        const color = RANK_COLOURS[rank] || '#334155';
+        return `<div class="player-row">
+          <span class="player-name">${p[1]}</span>
+          <span class="rank-badge" style="background:${color};">${rank||'—'}</span>
+        </div>`;
+      }).join('');
+    }
+
+    async function load() {
+      const params = new URLSearchParams(location.search);
+      const team   = params.get('team') || '';
+      const league = (params.get('league') || 'overdrive').toLowerCase();
+      const config = LEAGUE_CONFIG[league] || LEAGUE_CONFIG.overdrive;
+
+      document.getElementById('back-link').href  = config.back;
+      document.getElementById('back-label').textContent = config.label;
+      document.getElementById('team-hero').classList.add(config.tier);
+
+      if (!team) {
+        document.getElementById('team-title').textContent = 'No team selected';
+        document.getElementById('fixtures-container').innerHTML = '<div class="empty">Navigate here from a standings page.</div>';
+        document.getElementById('roster-container').innerHTML   = '';
+        return;
+      }
+
+      document.title = team + ' — Hyper League';
+      document.getElementById('team-title').textContent = team;
+
+      try {
+        const txt = await fetch(url(SEASON_GID)+ts(),{cache:'no-store'}).then(r=>r.text());
+        const s   = txt.trim().split(/\r?\n/)[0].split(',')[0].replace(/"/g,'').trim();
+        if (s) {
+          const el = document.getElementById('season-num');
+          el.textContent = s;
+          document.getElementById('league-subtitle').textContent = `${config.label} · Season ${s}`;
+        } else {
+          document.getElementById('league-subtitle').textContent = config.label;
+        }
+      } catch(_) {
+        document.getElementById('league-subtitle').textContent = config.label;
+      }
+
+      // Fetch team colours from standings
+      const colours = {};
+      try {
+        const cTxt = await fetch(url(config.standingsGid)+ts(),{cache:'no-store'}).then(r=>r.text());
+        cTxt.replace(/\r/g,'').split('\n').slice(1).forEach(row => {
+          const c = row.split(',');
+          const name   = (c[1]||'').trim().toLowerCase();
+          const colour = (c[9]||'').trim();
+          if (name && colour) colours[name] = colour;
+        });
+      } catch(_) {}
+
+      // Fetch fixtures
+      try {
+        const txt  = await fetch(url(config.gid)+ts(),{cache:'no-store'}).then(r=>r.text());
+        const grid = csvToGrid(txt);
+        renderFixtures(parseFixtures(grid, team), team, colours);
+      } catch(e) {
+        document.getElementById('fixtures-container').innerHTML = '<div class="empty">Failed to load fixtures.</div>';
+      }
+
+      // Fetch roster
+      try {
+        const txt = await fetch(url('1229444923')+ts(),{cache:'no-store'}).then(r=>r.text());
+        renderRoster(txt, team);
+      } catch(e) {
+        document.getElementById('roster-container').innerHTML = '<div class="empty">Failed to load roster.</div>';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
